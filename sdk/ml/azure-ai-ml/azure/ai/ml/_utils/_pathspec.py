@@ -48,32 +48,32 @@ class Pattern(object):
         or is a null-operation (:data:`None`).
         """
 
-    def match(self, files: Iterable[str]) -> Iterable[str]:
+    def match(self, paths: Iterable[str]) -> Iterable[str]:
         """Matches this pattern against the specified files.
 
-        :param files: Contains each file relative to the root directory (e.g. :data:`"relative/path/to/file"`).
-        :type files: Iterable[str]
-        :return: The matched file paths
+        :param paths: Contains each file relative to the root directory (e.g. :data:`"relative/path/to/file"`).
+        :type paths: Iterable[str]
+        :return: The matched paths
         :rtype: Iterable[str]
 
         .. deprecated::
 
-            This method is no longer used and has been replaced by :meth:`.match_file`. Use the :meth:`.match_file`
+            This method is no longer used and has been replaced by :meth:`.match_path`. Use the :meth:`.match_path`
             method with a loop for similar results.
         """
         warnings.warn(
             (
                 "{0.__module__}.{0.__qualname__}.match() is deprecated. Use "
-                "{0.__module__}.{0.__qualname__}.match_file() with a loop for "
+                "{0.__module__}.{0.__qualname__}.match_path() with a loop for "
                 "similar results."
             ).format(self.__class__),
             DeprecationWarning,
             stacklevel=2,
         )
 
-        for file in files:
-            if self.match_file(file) is not None:
-                yield file
+        for path in paths:
+            if self.match_path(path) is not None:
+                yield path
 
     def match_file(self, file: str) -> Optional[Any]:
         """Matches this pattern against the specified file.
@@ -82,9 +82,33 @@ class Pattern(object):
         :type file: str
         :return: Returns the match result if *file* matched; otherwise, :data:`None`.
         :rtype: Optional[Any]
+
+        .. deprecated::
+
+            This method is no longer used and has been replaced by :meth:`.match_path`. Use the :meth:`.match_path`
+            method with a loop for similar results.
+        """
+        warnings.warn(
+            (
+                "{0.__module__}.{0.__qualname__}.match_file() is deprecated. Use "
+                "{0.__module__}.{0.__qualname__}.match_path() instead."
+            ).format(self.__class__),
+            DeprecationWarning,
+            stacklevel=2,
+        )
+
+        return self.match_path(file)
+
+    def match_path(self, path: str) -> Optional[Any]:
+        """Matches this pattern against the specified path.
+
+        :param path: The normalized path to match against.
+        :type path: str
+        :return: Returns the match result if *path* matched; otherwise, :data:`None`.
+        :rtype: Optional[Any]
         """
         raise NotImplementedError(
-            ("{0.__module__}.{0.__qualname__} must override match_file().").format(self.__class__)
+            ("{0.__module__}.{0.__qualname__} must override match_path().").format(self.__class__)
         )
 
 
@@ -159,17 +183,17 @@ class RegexPattern(Pattern):
             return self.include == other.include and self.regex == other.regex
         return NotImplemented
 
-    def match_file(self, file: str) -> Optional["RegexMatchResult"]:
-        """Matches this pattern against the specified file.
+    def match_path(self, path: str) -> Optional["RegexMatchResult"]:
+        """Matches this pattern against the specified path.
 
-        :param file: File relative to the root directory (e.g., "relative/path/to/file").
-        :type file: str
-        :return: Returns the match result (:class:`RegexMatchResult`) if *file*
+        :param path: Path relative to the root directory (e.g., "relative/path/to/file").
+        :type path: str
+        :return: Returns the match result (:class:`RegexMatchResult`) if *path*
            matched; otherwise, :data:`None`.
         :rtype: Optional[RegexMatchResult]
         """
         if self.include is not None:
-            match = self.regex.match(file)
+            match = self.regex.match(path)
             if match is not None:
                 return RegexMatchResult(match)
 
@@ -553,17 +577,17 @@ class GitWildMatchPattern(RegexPattern):
         return out_string
 
 
-def normalize_file(file: Union[str, os.PathLike], separators: Optional[Iterable[str]] = None) -> str:
-    """Normalizes the file path to use the POSIX path separator (i.e.,
+def normalize_path(path: Union[str, os.PathLike], separators: Optional[Iterable[str]] = None) -> str:
+    """Normalizes the path to use the POSIX path separator (i.e.,
     ``'/'``), and make the paths relative (remove leading ``'/'``).
 
-    :param file: The file path.
-    :type file: Union[str, os.PathLike]
+    :param path: The file or directory path.
+    :type path: Union[str, os.PathLike]
     :param separators: The path separators to normalize. This does not need to include the POSIX path separator
         (``'/'``), but including it will not affect the results. Default is :data:`None` for
         :data:`NORMALIZE_PATH_SEPS`. To prevent normalization, pass an empty container (e.g., an empty tuple ``()``).
     :type separators: Optional[Iterable[str]]
-    :return: The normalized file path.
+    :return: The normalized path.
     :rtype: str
     """
     # Normalize path separators.
@@ -571,17 +595,17 @@ def normalize_file(file: Union[str, os.PathLike], separators: Optional[Iterable[
         separators = NORMALIZE_PATH_SEPS
 
     # Convert path object to string.
-    norm_file = str(file)
+    norm_path = str(path)
 
     for sep in separators:
-        norm_file = norm_file.replace(sep, posixpath.sep)
+        norm_path = norm_path.replace(sep, posixpath.sep)
 
-    if norm_file.startswith("/"):
+    if norm_path.startswith("/"):
         # Make path relative.
-        norm_file = norm_file[1:]
+        norm_path = norm_path[1:]
 
-    elif norm_file.startswith("./"):
+    elif norm_path.startswith("./"):
         # Remove current directory prefix.
-        norm_file = norm_file[2:]
+        norm_path = norm_path[2:]
 
-    return norm_file
+    return norm_path

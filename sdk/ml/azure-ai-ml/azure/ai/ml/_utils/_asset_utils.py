@@ -54,7 +54,7 @@ from azure.ai.ml._restclient.v2022_05_01.models import (
     ModelVersionResourceArmPaginatedResult,
 )
 from azure.ai.ml._restclient.v2023_04_01.models import PendingUploadRequestDto
-from azure.ai.ml._utils._pathspec import GitWildMatchPattern, normalize_file
+from azure.ai.ml._utils._pathspec import GitWildMatchPattern, normalize_path
 from azure.ai.ml._utils.utils import convert_windows_path_to_unix, retry, snake_to_camel
 from azure.ai.ml.constants._common import MAX_AUTOINCREMENT_ATTEMPTS, DefaultOpenEncoding, OrderString
 from azure.ai.ml.entities._assets.asset import Asset
@@ -164,11 +164,37 @@ class IgnoreFile(object):
         if file_path is None:
             return True
 
-        norm_file = normalize_file(file_path)
+        norm_file = normalize_path(file_path)
         matched = False
         for pattern in self._path_spec:
             if pattern.include is not None:
-                if pattern.match_file(norm_file) is not None:
+                if pattern.match_path(norm_file) is not None:
+                    matched = pattern.include
+
+        return matched
+
+    def is_directory_excluded(self, dir_path: Union[str, os.PathLike]) -> bool:
+        """Checks if given dir_path is excluded.
+
+        :param dir_path: Directory path to be checked against ignore file specifications
+        :type dir_path: Union[str, os.PathLike]
+        :return: Whether the directory is excluded by ignore file
+        :rtype: bool
+        """
+        # TODO: current design of ignore file can't distinguish between files and directories of the same name
+        if self._path_spec is None:
+            self._path_spec = self._create_pathspec()
+        if not self._path_spec:
+            return False
+        dir_path = self._get_rel_path(dir_path)
+        if dir_path is None:
+            return True
+
+        norm_path = normalize_path(dir_path)
+        matched = False
+        for pattern in self._path_spec:
+            if pattern.include is not None:
+                if pattern.match_path(norm_path) is not None:
                     matched = pattern.include
 
         return matched
@@ -353,7 +379,7 @@ def get_upload_files_from_folder(
 ) -> List[str]:
     path = Path(path)
     upload_paths = []
-    for root, _, files in os.walk(path, followlinks=True):
+    for root, dirnames, files in os.walk(path, followlinks=True):
         upload_paths += list(
             traverse_directory(
                 root,
@@ -362,6 +388,15 @@ def get_upload_files_from_folder(
                 ignore_file=ignore_file,
             )
         )
+        print(root, dirnames, files)
+
+        root = Path(root).resolve().absolute()
+        dirnames[:] = [
+            dirname for dirname in dirnames
+            # if not ignore_file.is_directory_excluded(root.joinpath(dirname).as_posix())
+            if not ignore_file.is_file_excluded(root.joinpath(dirname).as_posix())
+            and not ignore_file.is_file_excluded(root.joinpath(dirname).as_posix() + "/")
+        ]
     return upload_paths
 
 
